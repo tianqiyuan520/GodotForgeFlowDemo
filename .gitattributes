@@ -1,0 +1,37 @@
+# 换行与文本属性 —— 写进仓库，别依赖各人机器的 core.autocrlf
+#
+# 为什么需要这个文件：本机全局是 core.autocrlf=true，而它只影响**检出**。
+# 实测：在全局 autocrlf=true 的机器上 clone 本仓库，全部文本文件都会变成 CRLF
+# （`git ls-files --eol` 在源仓库里是 i/lf w/lf，clone 出来却是 CRLF）。
+#
+# 这不只是「难看」：本项目已经被**文本往返**毁过两次中文注释
+# （Windows PowerShell 的 GBK 往返把注释变成乱码，而那种损坏编译通过、测试全绿）。
+# 那些文件的第 3 个字节被吞成 `?`，甚至把后一个字节一起吃掉导致换行消失、
+# 行数从 2121 掉到 1897。任何「自动改写文本层」的东西都值得显式钉死。
+#
+# ⇒ 一律 LF 入库、一律 LF 检出。这样无论谁的机器怎么配，源码字节都一致。
+* text=auto eol=lf
+
+# 二进制：明确标出，免得被当文本做任何转换
+*.png       binary
+*.aseprite  binary
+*.svg       binary
+
+# Godot：.import / .uid 必须原样往返（它们存的是 uid 与导入设置，
+# 丢了就要重新导入、还可能改变 uid 进而让 .tscn 的引用失效）
+*.import    text eol=lf
+*.uid       text eol=lf
+*.tscn      text eol=lf
+*.tres      text eol=lf
+*.godot     text eol=lf
+*.gdshader  text eol=lf
+
+# 第三方授权文件：**原样保留**（连换行都不该由我们改写）。
+# ⚠ 只列当前真的在仓库里的路径 —— 规则指向不存在的文件是死配置，会让人误以为它还有效。
+# ⚠ 路径里有**空格**时不能直接写 `dir/*.txt`（空格会终止模式，git 会把后半段当成属性名，
+#   报 `pack/*.txt is not a valid attribute name` 并**静默忽略整条规则**）。
+#   要么用 `\\ ` 转义空格，要么用不含空格的模式（下面用 `*.txt` 兜底已足够）。
+# ⚠ 当前仓库里**没有任何 .txt**（Kenney 的 License.txt 已随无用素材一并移除）；
+#   将来若再入库带授权的素材包，把它的授权文件也一并加进来。
+*.txt       -text
+

@@ -1,0 +1,125 @@
+[gd_scene load_steps=9 format=3]
+
+; ============================================================================
+; Stress.tscn —— **百万件物品压力测试场景**。
+;
+; 与 Main.tscn 的关系：共用同一套渲染通路（同一份着色器 / 图集 / RenderBridge），
+; 但**不加载任何玩法交互**（没有工具栏、没有建造、没有蓝图）——
+; 这个场景的唯一目的是量「百万件工厂在不同视口下，一帧到底花多少时间、剔除掉多少」。
+;
+; ⚠ 工程约定（AGENTS.md §2）：**节点与资源一律在场景里预建**，脚本不 new Node / AddChild。
+;   所以相机、MultiMesh、HUD 全在这里，脚本只做解析、连线、改属性。
+; ============================================================================
+
+[ext_resource type="Script" path="res://Scripts/StressRunner.cs" id="1_stress"]
+[ext_resource type="Texture2D" path="res://assets/automation pack/automation spritesheet.png" id="2_atlas"]
+[ext_resource type="Shader" path="res://Shaders/atlas_multimesh.gdshader" id="3_atlas_shader"]
+[ext_resource type="Shader" path="res://Shaders/grid_background.gdshader" id="4_grid_shader"]
+[ext_resource type="Script" path="res://Scripts/CameraController.cs" id="5_camera"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_atlas"]
+shader = ExtResource("3_atlas_shader")
+shader_parameter/atlas_texture = ExtResource("2_atlas")
+shader_parameter/cell_size = Vector2(0.1, 0.0084745763)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
+shader = ExtResource("4_grid_shader")
+shader_parameter/cell_size = 32.0
+shader_parameter/major_every = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_hud"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.06, 0.07, 0.09, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.62, 0.7, 0.8, 0.25)
+
+[sub_resource type="QuadMesh" id="QuadMesh_unit"]
+
+[sub_resource type="MultiMesh" id="MultiMesh_items"]
+use_colors = false
+use_custom_data = true
+mesh = SubResource("QuadMesh_unit")
+
+; ⚠ **z 序**：机器名 label 是用根节点的 `_Draw` 画的，所以根的 z 必须**高于**实例层，
+;   否则 label 会被带面/机器盖住（用户报的就是这个）。
+;
+;   而且**必须显式关掉 `z_as_relative`**：Godot 默认子节点的 z_index 是**相对父节点**的，
+;   根抬到 2 之后，子节点（带面 z=1）会跟着变成 2+1=3，反而又压回 label 上面。
+;   把两层都设成绝对 z，序就完全确定了：
+;     底 -1（网格） < 实例层 1（带面/机器/物品） < 顶 2（label）
+[node name="Stress" type="Node2D"]
+z_index = 2
+script = ExtResource("1_stress")
+
+; 相机：初始停在世界的左上角区域。百万规模的工厂铺满上万像素，
+; 所以相机在这个场景里是**必需**的（一屏只能看见 60×34 格）。
+[node name="Camera" type="Camera2D" parent="."]
+position = Vector2(320, 320)
+script = ExtResource("5_camera")
+
+; 网格底：盖住整个可建区。世界宽约 8064px、高约 128000px（4000 行 × 32px）。
+; ⚠ mouse_filter = 2（IGNORE）必须设：ColorRect 是 Control，默认 STOP 会把鼠标全吃掉。
+[node name="GridBackground" type="ColorRect" parent="."]
+z_index = -1
+z_as_relative = false
+mouse_filter = 2
+offset_left = -256.0
+offset_top = -256.0
+offset_right = 33024.0
+offset_bottom = 129024.0
+color = Color(0, 0, 0, 0)
+material = SubResource("ShaderMaterial_grid")
+
+[node name="ItemMultiMesh" type="MultiMeshInstance2D" parent="."]
+z_index = 1
+z_as_relative = false
+material = SubResource("ShaderMaterial_atlas")
+multimesh = SubResource("MultiMesh_items")
+texture = ExtResource("2_atlas")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+; ⚠ 面板必须显式给一个最小宽度。
+;   PanelContainer 的宽度会**被内容撑开**，但也可能被压到很窄 —— 这里 HUD 文本里有
+;   `%` / `×` 与数字，没有最小宽度时 Label 会**一个字符一行**地竖着排
+;   （截图里看起来像一串竖排的乱码，只有截图能发现这类问题）。
+;   这与 AGENTS.md §5 里那条「长 Label 会撑开面板」是同一类：面板宽度必须显式管起来。
+[node name="Panel" type="PanelContainer" parent="Hud"]
+offset_left = 8.0
+offset_top = 8.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_hud")
+custom_minimum_size = Vector2(760, 0)
+
+[node name="VBox" type="VBoxContainer" parent="Hud/Panel"]
+
+[node name="LineStatus" type="Label" parent="Hud/Panel/VBox"]
+autowrap_mode = 2
+custom_minimum_size = Vector2(740, 0)
+text = "…"
+
+[node name="LineInstances" type="Label" parent="Hud/Panel/VBox"]
+autowrap_mode = 2
+custom_minimum_size = Vector2(740, 0)
+text = "…"
+
+[node name="LineTiming" type="Label" parent="Hud/Panel/VBox"]
+autowrap_mode = 2
+custom_minimum_size = Vector2(740, 0)
+text = "…"
+
+[node name="LineWorld" type="Label" parent="Hud/Panel/VBox"]
+autowrap_mode = 2
+custom_minimum_size = Vector2(740, 0)
+text = "…"
+
+[node name="LineHint" type="Label" parent="Hud/Panel/VBox"]
+autowrap_mode = 2
+custom_minimum_size = Vector2(740, 0)
+text = "…"

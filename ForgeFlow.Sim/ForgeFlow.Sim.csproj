@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    模拟内核。硬约束（见 docs/技术方案-核对与规划.md 2.7(5)）：
+      1. 零 Godot 引用 —— 不 using Godot，公共签名里不出现 Godot 类型
+      2. 零 ECS/框架引用 —— 阶段 0~2 走「路线 A：不引任何框架」
+      3. 可 dotnet test / dotnet run 独立跑，不依赖编辑器
+    这样框架选型（技术方案 2.7 的 G1 门禁）才能推迟到有实测数据之后。
+
+    TFM 必须是 net8.0：Godot 工程是 net8.0，net8.0 工程无法引用 net9.0 库。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ForgeFlow.Sim</RootNamespace>
+    <AssemblyName>ForgeFlow.Sim</AssemblyName>
+  </PropertyGroup>
+
+</Project>

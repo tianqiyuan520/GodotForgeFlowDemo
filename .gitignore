@@ -1,0 +1,44 @@
+# --- Godot 4 ---
+# .godot/ 是可再生的导入缓存与中间输出（Godot.NET.Sdk 也把 bin/obj 重定向到这里）
+.godot/
+/android/
+
+# 注意：*.import 文件要提交（它们保存 uid 与导入设置），不要忽略
+
+# --- .NET ---
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+
+# --- IDE ---
+.vs/
+.idea/
+*.swp
+
+# --- OS ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- 开发侧文档与工具（作者要求：不进版本控制） ---
+# 这些文件在本地照常存在、照常可用，只是不随仓库分发。
+#
+# ⚠ 代价要说清楚，别让后来人以为「没有就等于不需要」：
+#   · tools/check_encoding.py 是编码守卫 —— 它是唯一一道能拦住
+#     「编译通过 + 测试全绿但源文件已损坏」的防线（详见 AGENTS.md §1）。
+#   · .editorconfig 里的 charset=utf-8 是让编辑器别把中文写成 GBK 的那条规则。
+#   两者都不进仓库，新克隆者就同时失去「规则」与「守卫」。
+#   ⇒ 若哪天要让别人接手这份代码，先把这两个文件放回来。
+/docs/
+/tools/
+/AGENTS.md
+/.editorconfig
+
+# 探针工程：16 个探针是 docs/ 里全部性能数字的唯一产出者。
+# 同样不分发 —— 那么那些数字对克隆者就只是「结论」，不可复现。
+/ForgeFlow.Sim.Probes/
+
+# 注意：assets/CREDITS.md 不忽略。它记着 sierrassets 素材包的授权原文，
+# 是合规凭证，必须随仓库走。

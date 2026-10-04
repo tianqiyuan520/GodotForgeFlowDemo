@@ -1,0 +1,40 @@
+<Project Sdk="Godot.NET.Sdk/4.7.0">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <!--
+    必须排除兄弟工程，否则构建会间歇性坏掉。
+
+    机制（逐层核实）：
+      Godot.NET.Sdk/Sdk.props:40  ->  Microsoft.NET.Sdk/Sdk.props:50
+        ->  Microsoft.NET.Sdk.DefaultItems.props:36
+              <Compile Include="**/*.cs" Exclude="$(DefaultItemExcludes);..." />
+    默认的 DefaultItemExcludes 只含：
+      - bin/** 与 obj/**（相对**项目根**，不匹配嵌套目录，见
+        Microsoft.NET.DefaultOutputPaths.targets:133）
+      - Godot 自己的 .godot/mono/temp/bin|obj（见 Sdk.props:19-27 改写了 BaseOutputPath）
+
+    本项目布局是「仓库根 = Godot 项目根」，因此 ForgeFlow.Sim/obj/ 下生成的
+    AssemblyInfo.cs、AssemblyAttributes.cs 会被当成游戏工程自己的源文件参与编译，
+    触发 CS0579 重复特性。而且它是**间歇性**的：先单独构建一次 Sim，
+    Godot 工程才开始坏；只在干净克隆上构建是看不出来的。
+
+    DefaultItemExcludes 在项目 body 里赋值是有效的：MSBuild 先求值全部属性、
+    再求值全部条目，所以这里的值对上面那条 Compile 通配是可见的。
+    下面再补一条 Compile Remove 作为显式兜底（条目按文档顺序求值，
+    Remove 位于 Include 之后，无副作用）。
+  -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);ForgeFlow.Sim/**;ForgeFlow.Sim.Probes/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="ForgeFlow.Sim/**;ForgeFlow.Sim.Probes/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="ForgeFlow.Sim\ForgeFlow.Sim.csproj" />
+  </ItemGroup>
+</Project>

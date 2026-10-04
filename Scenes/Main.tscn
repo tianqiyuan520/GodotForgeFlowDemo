@@ -1,0 +1,636 @@
+[gd_scene load_steps=14 format=3 uid="uid://dfey4vhpw8kgo"]
+
+[ext_resource type="Script" uid="uid://bsvdxp5kui68r" path="res://Scripts/WalkingSkeleton.cs" id="1_skeleton"]
+[ext_resource type="Texture2D" path="res://assets/automation pack/automation spritesheet.png" id="2_atlas"]
+[ext_resource type="Shader" uid="uid://dkw1myuacbpxc" path="res://Shaders/atlas_multimesh.gdshader" id="3_atlas_shader"]
+[ext_resource type="Shader" path="res://Shaders/grid_background.gdshader" id="4_grid_shader"]
+[ext_resource type="Script" path="res://Scripts/CameraController.cs" id="5_camera"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_atlas"]
+shader = ExtResource("3_atlas_shader")
+shader_parameter/atlas_texture = ExtResource("2_atlas")
+shader_parameter/cell_size = Vector2(0.1, 0.0084745763)
+
+; 预览层专用材质：与上面**同一份着色器**、但**另一个实例** ——
+; tint 只染预览层（铺带的预计位置：可铺淡蓝 / 冲突淡红），主图集层读不到它。
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_preview"]
+shader = ExtResource("3_atlas_shader")
+shader_parameter/atlas_texture = ExtResource("2_atlas")
+shader_parameter/cell_size = Vector2(0.1, 0.0084745763)
+shader_parameter/tint = Color(1, 1, 1, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
+shader = ExtResource("4_grid_shader")
+shader_parameter/cell_size = 32.0
+shader_parameter/major_every = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_hud"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.06, 0.07, 0.09, 0.78)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.62, 0.7, 0.8, 0.25)
+
+[sub_resource type="QuadMesh" id="QuadMesh_unit"]
+
+[sub_resource type="MultiMesh" id="MultiMesh_items"]
+use_colors = false
+use_custom_data = true
+mesh = SubResource("QuadMesh_unit")
+
+[sub_resource type="MultiMesh" id="MultiMesh_probe"]
+use_custom_data = true
+mesh = SubResource("QuadMesh_unit")
+
+; ============================================================================
+; 工具栏图标：**每个可建造项一个 AtlasTexture 子资源**（资源在场景里预建）。
+; region 与 ContentDb 里那一行的 MachineArt **用的是同一块实测内容矩形** ——
+; 两处必须一致，否则「按钮上的图」和「放下去的图」不一样。
+; ⚠ 这些数字由 `python tools/measure_art.py` 量出来，不要手敲：
+;   早期手敲的框对非方形精灵是错的（水塔被裁掉右边 2px、机械臂把邻格像素一起框进来）。
+; ============================================================================
+[sub_resource type="AtlasTexture" id="AtlasTex_00"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 770, 39, 30)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_01"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 802, 39, 30)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_02"]
+atlas = ExtResource("2_atlas")
+region = Rect2(24, 1056, 47, 31)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_03"]
+atlas = ExtResource("2_atlas")
+region = Rect2(24, 1120, 47, 31)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_04"]
+atlas = ExtResource("2_atlas")
+region = Rect2(24, 1184, 47, 31)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_05"]
+atlas = ExtResource("2_atlas")
+region = Rect2(24, 1248, 47, 31)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_06"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 866, 39, 30)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_07"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 482, 39, 31)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_08"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 834, 39, 30)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_09"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 2337, 39, 30)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_10"]
+atlas = ExtResource("2_atlas")
+region = Rect2(4, 3415, 27, 41)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_11"]
+atlas = ExtResource("2_atlas")
+region = Rect2(4, 3223, 23, 41)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_12"]
+atlas = ExtResource("2_atlas")
+region = Rect2(28, 1431, 39, 40)
+
+[sub_resource type="AtlasTexture" id="AtlasTex_13"]
+atlas = ExtResource("2_atlas")
+region = Rect2(4, 3021, 18, 51)
+
+; 铺带按钮的图标 = 图集里的直线带瓦片（行 5 列 0）。它不是「一种机器」，
+; 所以 ContentDb 里没有对应的一行，这个 AtlasTexture 只属于菜单（见 ToolButtonBelt）。
+[sub_resource type="AtlasTexture" id="AtlasTex_belt"]
+atlas = ExtResource("2_atlas")
+region = Rect2(0, 160, 32, 32)
+
+; z order: the root draws the machine-name labels via _Draw, so it must sit ABOVE the
+; instance layer (z=1). Children keep their own absolute z below (z_as_relative=false),
+; otherwise they would inherit this and cover the labels again.
+[node name="Main" type="Node2D" unique_id=1947977959]
+z_index = 4
+script = ExtResource("1_skeleton")
+ItemMultiMesh = NodePath("ItemMultiMesh")
+
+; 相机：控制脚本挂在**场景预建的 Camera2D** 上（WASD 平移 / 滚轮缩放 / 中键拖拽 / Home 复位）。
+; (900, 430) 是为了让工厂整体避开左上角的 HUD，同时把第 23..26 行那条空地
+; （交错高低轨展示区所在的三行，见 WalkingSkeleton.CreateSim 的 (2,24)）留在画面内。
+[node name="Camera" type="Camera2D" parent="." unique_id=1087245493]
+position = Vector2(900, 430)
+script = ExtResource("5_camera")
+
+; 网格底按世界坐标对齐（shader 里用 MODEL_MATRIX），所以这里铺得比视口大一圈也没关系。
+; 相机下移到 (900, 430) 是为了让工厂整体避开左上角的 HUD。
+; ⚠ **铺的范围要盖住整个可建造区**：占用位图是 256×256 格（FactorySim.OccupancyWidth/Height），
+;   世界坐标就是 0..8192 —— 早期这里只铺到 (2304,1408)（格 71），于是**在格 71 以外仍然能建造，
+;   但地上没有格线**：玩家会觉得「这里到底算不算在网格上」，而这一层的存在意义正是让人读出
+;   「东西是建在网格上的」。多铺出去的代价是 0（视口外的部分被裁掉，fragment 只跑在屏幕内）。
+; ⚠ mouse_filter = 2（IGNORE）**必须设**：
+;   ColorRect 是 Control 节点，默认 mouse_filter = STOP，而它铺满整屏 ⇒
+;   会把所有鼠标点击吃掉，_UnhandledInput 永远收不到 → 表现就是「点了没反应、无法放置」。
+;   纯装饰性的全屏 Control 一律要设成 IGNORE。
+[node name="GridBackground" type="ColorRect" parent="."]
+z_index = -1
+z_as_relative = false
+mouse_filter = 2
+offset_left = -256.0
+offset_top = -256.0
+offset_right = 8448.0
+offset_bottom = 8448.0
+color = Color(0, 0, 0, 0)
+material = SubResource("ShaderMaterial_grid")
+
+[node name="ItemMultiMesh" type="MultiMeshInstance2D" parent="." unique_id=147948138]
+z_index = 1
+z_as_relative = false
+material = SubResource("ShaderMaterial_atlas")
+multimesh = SubResource("MultiMesh_items")
+texture = ExtResource("2_atlas")
+
+[node name="DiagSprite" type="Sprite2D" parent="." unique_id=212319044]
+z_as_relative = false
+visible = false
+z_index = 2
+position = Vector2(300, 200)
+texture = ExtResource("2_atlas")
+
+; ProbeMultiMesh 现在身兼两职：
+;   ① 诊断（FORGEFLOW_DIAG_MULTIMESH=1 时写 1 个放大实例，用来隔离「MultiMesh 能不能画」）；
+;   ② **蓝图粘贴预览**（把剪贴板内容按光标位置画一遍）。
+; 两者不会同时用；所以它也需要图集材质，否则预览会画成一片纯色方块。
+[node name="ProbeMultiMesh" type="MultiMeshInstance2D" parent="." unique_id=1943920488]
+z_as_relative = false
+visible = false
+z_index = 3
+material = SubResource("ShaderMaterial_preview")
+multimesh = SubResource("MultiMesh_probe")
+texture = ExtResource("2_atlas")
+
+; 建造幽灵预览：直接复用图集（region 指向当前可建造项的取样框），代码只改 position/region/modulate/rotation。
+; z_index 高于工厂内容，保证永远画在最上面。
+[node name="BuildGhost" type="Sprite2D" parent="."]
+z_as_relative = false
+visible = false
+z_index = 10
+texture = ExtResource("2_atlas")
+
+; 框选矩形（蓝图复制用）：只是一个视觉反馈，mouse_filter 同样是 IGNORE。
+[node name="SelectionRect" type="ColorRect" parent="."]
+z_as_relative = false
+visible = false
+z_index = 9
+mouse_filter = 2
+color = Color(0.45, 0.72, 1, 0.18)
+
+; ============================================================================
+; 预览矩形池 —— 「铺带会铺到哪」与「拆除会拆掉谁」的占地高亮。
+;
+; 为什么是矩形而不是逐格描边：
+;   一段带永远是横或竖的**直线**（模拟侧 DrawBelt 只接受横/竖），机器占地也是矩形，
+;   所以占地天然就是一个矩形；而节点必须**在场景里预建**（工程约定），
+;   于是固定开 3 个复用：L 形拖拽最多 2 段 + 余量 1。
+;   颜色由脚本按状态给：淡蓝 = 能铺、淡红 = 有冲突、橙红 = 拆除目标（见 WalkingSkeleton）。
+; 代码里容器是 `PreviewRect00..NN` 顺序扫描，**加一个节点就多一块**，不需要改代码。
+; ============================================================================
+[node name="PreviewRect00" type="ColorRect" parent="."]
+z_as_relative = false
+visible = false
+z_index = 8
+mouse_filter = 2
+color = Color(0.45, 0.72, 1, 0.3)
+
+[node name="PreviewRect01" type="ColorRect" parent="."]
+z_as_relative = false
+visible = false
+z_index = 8
+mouse_filter = 2
+color = Color(0.45, 0.72, 1, 0.3)
+
+[node name="PreviewRect02" type="ColorRect" parent="."]
+z_as_relative = false
+visible = false
+z_index = 8
+mouse_filter = 2
+color = Color(0.45, 0.72, 1, 0.3)
+
+; ============================================================================
+; HUD —— 全部节点在场景里预建（遵守工程约定），脚本只改 text / visible / modulate。
+; CanvasLayer ⇒ 不受 Camera2D 影响，永远贴在屏幕上。
+; ============================================================================
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="Hud"]
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 12.0
+offset_bottom = 12.0
+theme_override_styles/panel = SubResource("StyleBox_hud")
+; ⚠ 必须**同时**给一个最小宽度：PanelContainer 的宽度取自子节点的**最小宽度**，
+;   而开了 autowrap 之后每个 Label 的最小宽度塌成长单词（中文约 1 个字）⇒
+;   只加 autowrap 会让整块面板缩成一条竖条、每行折成一两个字。
+;   定死宽度 + autowrap 才是「面板不随文本变宽、长行自己折行」。
+custom_minimum_size = Vector2(480, 0)
+; ⚠ mouse_filter = 2（IGNORE）**必须设**：PanelContainer 默认是 STOP，
+;   它盖住的那一片厂区，鼠标点击会被**全部吃掉**，玩家看到的是「点了没反应」。
+;   面板里全是 Label，没有任何需要点的地方，所以直接让它忽略鼠标。
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="Hud/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="LineStatus" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "状态"
+
+[node name="LineThroughput" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "吞吐"
+
+[node name="LineMachines" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "机器"
+
+[node name="LineInstances" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "实例"
+
+[node name="LinePacing" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "节奏"
+
+[node name="LineHint" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.62, 0.7, 0.8, 0.55)
+autowrap_mode = 2
+text = "提示"
+
+[node name="LineBuild" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.62, 0.9, 0.7, 1)
+autowrap_mode = 2
+text = "建造"
+
+; 选中信息（左键单击选中的机器 / 带 / 管道）。刻意与「建造」分开两行：
+; 建造行说的是「按下左键会长出什么」，这一行说的是「我选中的那个东西现在是什么状态」。
+[node name="LineInfo" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.55, 0.78, 1, 1)
+autowrap_mode = 2
+text = "选中"
+
+; **物品图例**：列出内容表里的全部物品（名字 + 图集格号）。
+; 文字由 `WalkingSkeleton` 启动时按 ContentDb 填 —— 加一种物品只改内容表，不动场景。
+; ⚠ 必须开 autowrap：不设的话长文本会成为面板的**最小宽度**，把面板撑宽、吃掉那一带的鼠标点击。
+[node name="LineItems" type="Label" parent="Hud/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+autowrap_mode = 2
+text = "物品"
+
+; ============================================================================
+; 建造菜单（工具栏）—— 右上角，**每个可建造项一组「图标按钮 + 名称/作用」，节点与图标资源都在场景里预建**。
+; 按钮名固定为 ToolButton00..NN（顺序 = ContentDb.Buildables 的顺序），紧跟一个同号的 ToolLabelNN；
+; 脚本按名字绑定，并在 _Ready 里用内容表填**名称与作用**（见 ContentDb.FunctionOf）——
+; 加一种建筑 = 内容表加一行 + 场景加一对「按钮 + 标签」，脚本不用改。
+; 布局是 4 列：一行放两组 [按钮][标签]，15 项 ⇒ 8 行，比一行一项矮一半。
+; ⚠ Label 必须开 autowrap：否则长文本会把面板撑宽，盖住厂区并吃掉那一带的鼠标点击。
+; ============================================================================
+[node name="Toolbar" type="PanelContainer" parent="Hud"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -508.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 470.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBox_hud")
+
+[node name="VBox" type="VBoxContainer" parent="Hud/Toolbar"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ToolTitle" type="Label" parent="Hud/Toolbar/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "建造菜单（点选 / 数字键 / B 铺带）"
+
+[node name="Grid" type="GridContainer" parent="Hud/Toolbar/VBox"]
+layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 3
+
+[node name="ToolButton00" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "铁矿机"
+icon = SubResource("AtlasTex_00")
+
+[node name="ToolLabel00" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "铁矿机"
+
+[node name="ToolButton01" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "铜矿机"
+icon = SubResource("AtlasTex_01")
+
+[node name="ToolLabel01" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "铜矿机"
+
+[node name="ToolButton02" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "铁熔炉"
+icon = SubResource("AtlasTex_02")
+
+[node name="ToolLabel02" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "铁熔炉"
+
+[node name="ToolButton03" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "铜熔炉"
+icon = SubResource("AtlasTex_03")
+
+[node name="ToolLabel03" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "铜熔炉"
+
+[node name="ToolButton04" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "齿轮机"
+icon = SubResource("AtlasTex_04")
+
+[node name="ToolLabel04" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "齿轮机"
+
+[node name="ToolButton05" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "电路板机"
+icon = SubResource("AtlasTex_05")
+
+[node name="ToolLabel05" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "电路板机"
+
+[node name="ToolButton06" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "出货机"
+icon = SubResource("AtlasTex_06")
+
+[node name="ToolLabel06" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "出货机"
+
+[node name="ToolButton07" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "分流器"
+icon = SubResource("AtlasTex_07")
+
+[node name="ToolLabel07" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "分流器"
+
+[node name="ToolButton08" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "合流器"
+icon = SubResource("AtlasTex_08")
+
+[node name="ToolLabel08" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "合流器"
+
+[node name="ToolButton09" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "仓储箱"
+icon = SubResource("AtlasTex_09")
+
+[node name="ToolLabel09" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "仓储箱"
+
+[node name="ToolButton10" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "长臂机械臂"
+icon = SubResource("AtlasTex_10")
+
+[node name="ToolLabel10" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "长臂机械臂"
+
+[node name="ToolButton11" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "均压泵"
+icon = SubResource("AtlasTex_11")
+
+[node name="ToolLabel11" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "均压泵"
+
+[node name="ToolButton12" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "水塔"
+icon = SubResource("AtlasTex_12")
+
+[node name="ToolLabel12" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "水塔"
+
+[node name="ToolButton13" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "洗矿机"
+icon = SubResource("AtlasTex_13")
+
+[node name="ToolLabel13" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "洗矿机"
+
+; 铺带 —— **它不是一个「可建造项」而是一种工具**（带不是机器），所以按钮名不走 ToolButtonNN 的
+; 编号序（那一串是按 ContentDb.Buildables 的顺序绑的），单独叫 ToolButtonBelt、由脚本单独接线。
+; 图标直接用图集里的直线带瓦片（行 5 列 0 = 32×32）。
+[node name="ToolButtonBelt" type="Button" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 2
+tooltip_text = "铺带（B，按住左键拖）"
+icon = SubResource("AtlasTex_belt")
+
+[node name="ToolLabelBelt" type="Label" parent="Hud/Toolbar/VBox/Grid"]
+custom_minimum_size = Vector2(200, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+text = "铺带
+拖拽铺设，自动拐角（Shift 换拐弯顺序）"
+
+[node name="ToolbarHint" type="Label" parent="Hud/Toolbar/VBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.62, 0.7, 0.8, 0.62)
+autowrap_mode = 2
+text = "左键：放置 / 铺带 / 单击选中 · 右键单击：拆一个 · 右键拖：框选 · X 或 Delete：拆选中"
+
+; ============================================================================
+; **轨道选择器**（左下角）—— 点机器之后在这里选它绑定哪条轨道（输入 / 输出）。
+;
+; 为什么要有它：带可以交错之后，「这台机器的输入是哪条带」几何已经推不出来
+; （旁边可能挨着好几条带；带从机器旁边**中段擦过**时几何更是完全发现不了）——
+; 见 FactoryLayout.MachineDef.InBeltBinding 的说明。
+;
+; 工程约定（AGENTS.md §2）：节点全部在这里预建，脚本只做解析、连线、改文本/可见性。
+;   · 候选轨道用 **ItemList 的条目**（条目是引擎画的，不是节点）—— 加多少条轨道都不用新节点；
+;   · 三个按钮**同一套选择器复用**：绑定输入 / 绑定输出 / 解除，作用对象都是列表里选中的那条。
+;
+; ⚠ 只在「选中一台机器」时可见（脚本控制）。不可见时它不吃鼠标 —— 这是有意的：
+;   全屏或长期存在的 Control 会把那一带的点击全吃掉（AGENTS.md §5 那条 PanelContainer 坑）。
+;
+; ⚠ 摆在**右下角**（不是左下角）：左下角正是交错高低轨展示区（第 24..26 行，见
+;   WalkingSkeleton.CreateSim）所在的地方 —— 面板一开就把"要看的东西"盖住了。
+;   右边这一列只有顶部的建造菜单，底部是空的。
+; ============================================================================
+[node name="TrackPicker" type="PanelContainer" parent="Hud"]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -402.0
+offset_top = -276.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBox_hud")
+
+[node name="VBox" type="VBoxContainer" parent="Hud/TrackPicker"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="Hud/TrackPicker/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.55, 0.78, 1, 1)
+autowrap_mode = 2
+text = "轨道绑定"
+
+[node name="Hint" type="Label" parent="Hud/TrackPicker/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.62, 0.7, 0.8, 0.62)
+autowrap_mode = 2
+text = "选中一条轨道，再决定它是这台机器的输入还是输出"
+
+[node name="TrackList" type="ItemList" parent="Hud/TrackPicker/VBox"]
+custom_minimum_size = Vector2(378, 104)
+layout_mode = 2
+allow_reselect = true
+theme_override_font_sizes/font_size = 12
+
+[node name="Buttons" type="HBoxContainer" parent="Hud/TrackPicker/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BtnBindIn" type="Button" parent="Hud/TrackPicker/VBox/Buttons"]
+layout_mode = 2
+text = "绑为输入轨"
+
+[node name="BtnBindOut" type="Button" parent="Hud/TrackPicker/VBox/Buttons"]
+layout_mode = 2
+text = "绑为输出轨"
+
+[node name="BtnClear" type="Button" parent="Hud/TrackPicker/VBox/Buttons"]
+layout_mode = 2
+text = "解除绑定"
+
+[node name="BtnClose" type="Button" parent="Hud/TrackPicker/VBox/Buttons"]
+layout_mode = 2
+text = "关闭"
+

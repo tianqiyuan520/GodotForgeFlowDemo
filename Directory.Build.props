@@ -1,0 +1,36 @@
+<Project>
+
+  <!--
+    为什么这个文件存在（而不是把这些设置写进各个 .csproj）：
+
+    Godot.NET.Sdk 对 Debug 与 ExportDebug 配置会默认设置 Optimize=false
+    （见 ~/.nuget/packages/godot.net.sdk/4.7.0/Sdk/Sdk.props 第 50-56 行）。
+    那会让整个程序集带上 JITOptimizerDisabled，使所有 C# 热路径慢 3 到 4 倍。
+    实测记录见 ComputeShaderBattleSimulation/ComputeShaderBattleSimulation.csproj 的注释：
+    渲染插值 1M 元素 7.9ms -> 1.98ms，主线程整帧 9.5~10.5ms -> 4.0~4.3ms。
+
+    Optimize 是**逐工程**生效的。Godot 以 Debug 配置构建时，被它引用的
+    ForgeFlow.Sim 同样会拿到 Optimize=false，所以只改 ForgeFlow.csproj 救不了
+    模拟内核的热路径。放在 Directory.Build.props 一次性覆盖所有工程。
+
+    求值顺序已核实：本文件由 Microsoft.Common.props 导入，早于 Godot 的
+    Sdk.props 第 50-56 行；而后者带 Condition="'$(Optimize)' == ''" 守卫，
+    因此不会覆盖这里的设置。
+
+    后果：Debug 下调部分局部变量不可见（优化后的常规现象）。若某次调试必须
+    看局部变量，临时把这里改成 false，不要长期关掉。
+  -->
+  <PropertyGroup>
+    <Optimize Condition=" '$(Configuration)' == 'Debug' or '$(Configuration)' == 'ExportDebug' ">true</Optimize>
+  </PropertyGroup>
+
+  <!-- 所有工程统一：允许 unsafe（arena / 裸指针访问），中文注释按 UTF-8 读取 -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>
